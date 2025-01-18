@@ -1,156 +1,201 @@
+# SMILANS VPN Server Setup
+
+## 📁 Directory Structure
+
+```
 /root/vpn/
-├── setup/
-│   ├── install.sh              # Script instalasi utama
-│   ├── dependency.sh           # Instalasi paket yang dibutuhkan
-│   ├── stunnel5.sh            # Instalasi & konfigurasi Stunnel5
-│   ├── ssh.sh                 # Instalasi SSH & Dropbear
-│   ├── xray.sh                # Instalasi Xray-core
-│   ├── nginx.sh               # Instalasi & config Nginx
-│   ├── ssl.sh                 # SSL certificate & Cloudflare manager
-│   └── ip.sh                  # IP validator & manager
+├── setup/                      # Installation Scripts
+│   ├── install.sh             # Main installation script
+│   ├── dependency.sh          # Package dependencies
+│   ├── stunnel5.sh           # Stunnel5 installation
+│   ├── ssh.sh                # SSH & Dropbear setup
+│   ├── xray.sh               # Xray-core installation
+│   ├── nginx.sh              # Nginx setup
+│   ├── ssl.sh                # SSL & Cloudflare manager
+│   └── ip.sh                 # IP whitelist manager
 │
-├── menu/
-│   ├── menu.sh                # Menu utama
-│   ├── ssh/
-│   │   ├── menu.sh           # Menu SSH
-│   │   ├── add.sh           # Tambah user SSH
-│   │   ├── del.sh           # Hapus user SSH
-│   │   ├── extend.sh        # Perpanjang user SSH
-│   │   └── list.sh          # List user SSH
+├── menu/                      # Menu Scripts
+│   ├── menu.sh               # Main menu
 │   │
-│   ├── vmess/
-│   │   ├── menu.sh          # Menu Vmess
-│   │   ├── add.sh           # Tambah user Vmess
-│   │   ├── del.sh           # Hapus user Vmess
-│   │   ├── extend.sh        # Perpanjang user Vmess
-│   │   └── list.sh          # List user Vmess
+│   ├── ssh/                  # SSH Management
+│   │   ├── menu.sh          # SSH menu
+│   │   ├── add.sh           # Add SSH user
+│   │   ├── del.sh           # Delete SSH user
+│   │   ├── extend.sh        # Extend SSH user
+│   │   └── list.sh          # List SSH users
 │   │
-│   ├── vless/
-│   │   ├── menu.sh          # Menu Vless
-│   │   ├── add.sh           # Tambah user Vless
-│   │   ├── del.sh           # Hapus user Vless
-│   │   ├── extend.sh        # Perpanjang user Vless
-│   │   └── list.sh          # List user Vless
+│   ├── vmess/               # Vmess Management
+│   │   ├── menu.sh          # Vmess menu
+│   │   ├── add.sh           # Add Vmess user
+│   │   ├── del.sh           # Delete Vmess user
+│   │   ├── extend.sh        # Extend Vmess user
+│   │   └── list.sh          # List Vmess users
 │   │
-│   ├── trojan/
-│   │   ├── menu.sh          # Menu Trojan
-│   │   ├── add.sh           # Tambah user Trojan
-│   │   ├── del.sh           # Hapus user Trojan
-│   │   ├── extend.sh        # Perpanjang user Trojan
-│   │   └── list.sh          # List user Trojan
+│   ├── vless/               # Vless Management
+│   │   ├── menu.sh          # Vless menu
+│   │   ├── add.sh           # Add Vless user
+│   │   ├── del.sh           # Delete Vless user
+│   │   ├── extend.sh        # Extend Vless user
+│   │   └── list.sh          # List Vless users
 │   │
-│   ├── utility/
-│   │   ├── menu.sh          # Menu Utility
-│   │   ├── backup.sh        # Backup sistem
-│   │   ├── restore.sh       # Restore sistem
-│   │   ├── domain.sh        # Ganti domain
-│   │   └── reboot.sh        # Reboot sistem
+│   ├── trojan/              # Trojan Management
+│   │   ├── menu.sh          # Trojan menu
+│   │   ├── add.sh           # Add Trojan user
+│   │   ├── del.sh           # Delete Trojan user
+│   │   ├── extend.sh        # Extend Trojan user
+│   │   └── list.sh          # List Trojan users
 │   │
-│   └── monitor/
-│       ├── menu.sh          # Menu monitoring
-│       ├── bandwidth.sh     # Monitor bandwidth
-│       ├── cpu.sh           # Monitor CPU/RAM
-│       └── log.sh           # View & clear logs
+│   ├── utility/             # Utility Tools
+│   │   ├── menu.sh          # Utility menu
+│   │   ├── backup.sh        # Backup system
+│   │   ├── restore.sh       # Restore system
+│   │   ├── domain.sh        # Domain management
+│   │   └── reboot.sh        # System reboot
+│   │
+│   └── monitor/             # Monitoring Tools
+│       ├── menu.sh          # Monitor menu
+│       ├── bandwidth.sh     # Bandwidth monitor
+│       ├── cpu.sh           # CPU/RAM monitor
+│       └── log.sh           # Log viewer
 │
-├── config/
-│   ├── config.json          # Konfigurasi utama
-│   ├── domain.conf          # Konfigurasi domain
-│   ├── ip-whitelist.conf    # Daftar IP yang diizinkan
+├── config/                   # Configuration Files
+│   ├── config.json          # Main config
+│   ├── domain.conf          # Domain config
+│   ├── ip-whitelist.conf    # IP whitelist
 │   │
-│   ├── xray/
-│   │   ├── vmess.json       # Konfigurasi Vmess
-│   │   ├── vless.json       # Konfigurasi Vless
-│   │   └── trojan.json      # Konfigurasi Trojan
+│   ├── xray/                # Xray Configs
+│   │   ├── vmess.json       # Vmess config
+│   │   ├── vless.json       # Vless config
+│   │   └── trojan.json      # Trojan config
 │   │
-│   ├── nginx/
+│   ├── nginx/               # Nginx Configs
 │   │   └── conf.d/
-│   │       └── xray.conf    # Config Nginx untuk Xray
+│   │       └── xray.conf    # Xray nginx config
 │   │
-│   └── stunnel5/
-│       ├── stunnel5.conf    # Konfigurasi Stunnel5
-│       └── stunnel5.pem     # Certificate Stunnel5
+│   └── stunnel5/            # Stunnel5 Configs
+│       ├── stunnel5.conf    # Stunnel config
+│       └── stunnel5.pem     # Stunnel cert
 │
-├── cert/
+├── cert/                    # SSL Certificates
 │   ├── fullchain.pem        # SSL certificate
-│   └── privkey.pem          # SSL private key
+│   └── privkey.pem          # Private key
 │
-└── logs/
-    ├── access.log           # Log akses
-    ├── error.log            # Log error
-    └── install.log          # Log instalasi
+└── logs/                    # Log Files
+    ├── access.log           # Access logs
+    ├── error.log            # Error logs
+    └── install.log          # Installation logs
+```
 
-Port yang digunakan:
---------------------
-1. SSH
-   - OpenSSH: 22
-   - Dropbear: 143, 109
-   - SSH WS: 80
-   - SSH WS SSL: 443
+## 🔌 Port Configuration
 
-2. Stunnel5
-   - OpenSSH: 447
-   - Dropbear: 445
-   - OpenVPN: 990
+### SSH Ports
+| Service | Port |
+|---------|------|
+| OpenSSH | 22 |
+| Dropbear | 143, 109 |
+| SSH WS | 80 |
+| SSH WS SSL | 443 |
 
-3. Xray
-   - Vmess WS TLS: 443
-   - Vmess WS: 80
-   - Vless WS TLS: 443
-   - Vless WS: 80
-   - Trojan: 443
+### Stunnel5 Ports
+| Service | Port |
+|---------|------|
+| OpenSSH | 447 |
+| Dropbear | 445 |
+| OpenVPN | 990 |
 
-4. Nginx
-   - HTTP: 80
-   - HTTPS: 443
+### Xray Ports
+| Service | Port |
+|---------|------|
+| Vmess WS TLS | 443 |
+| Vmess WS | 80 |
+| Vless WS TLS | 443 |
+| Vless WS | 80 |
+| Trojan | 443 |
 
-Package yang dibutuhkan:
------------------------
-1. Base System:
-   - curl wget socat
-   - net-tools
-   - python3 python3-pip
-   - cron
-   - iptables
-   - fail2ban
-   - vnstat
+### Web Server Ports
+| Service | Port |
+|---------|------|
+| HTTP | 80 |
+| HTTPS | 443 |
 
-2. Web Server:
-   - nginx
-   - apache2-utils
+## 📦 Required Packages
 
-3. SSL & Security:
-   - openssl
-   - stunnel5 (compile from source)
-   - certbot
+### Base System
+- curl wget socat
+- net-tools
+- python3 python3-pip
+- cron
+- iptables
+- fail2ban
+- vnstat
 
-4. SSH:
-   - openssh-server
-   - dropbear
-   - squid
-   - ws-epro
+### Web Server
+- nginx
+- apache2-utils
 
-5. Xray:
-   - xray-core
-   - jq (JSON processor)
+### SSL & Security
+- openssl
+- stunnel5 (compiled from source)
+- certbot
 
-Service Management:
------------------
-1. Stunnel5:
-   - Enable pada boot
-   - Auto restart jika down
-   - Monitor status
+### SSH Services
+- openssh-server
+- dropbear
+- squid
+- ws-epro
 
-2. Xray:
-   - Multi-user support
-   - Auto backup config
-   - Monitor performance
+### Xray
+- xray-core
+- jq (JSON processor)
 
-3. Nginx:
-   - Reverse proxy untuk Xray
-   - SSL termination
-   - Web server untuk panel
+## 🛠 Service Management
 
-4. Security:
-   - IP whitelist
-   - Fail2ban integration
-   - Auto-ban malicious IP
+### Stunnel5
+- [x] Enable on boot
+- [x] Auto restart on failure
+- [x] Status monitoring
+
+### Xray
+- [x] Multi-user support
+- [x] Config backup
+- [x] Performance monitoring
+
+### Nginx
+- [x] Xray reverse proxy
+- [x] SSL termination
+- [x] Web panel server
+
+### Security
+- [x] IP whitelist
+- [x] Fail2ban integration
+- [x] Malicious IP auto-ban
+
+## 📝 Installation
+
+```bash
+git clone https://github.com/kayshinko/vpn-projeck.git /root/vpn
+cd /root/vpn/setup
+chmod +x install.sh
+./install.sh
+```
+
+## 🔒 Security Notes
+
+1. Always change default passwords
+2. Regularly update allowed IP list
+3. Monitor logs for suspicious activities
+4. Keep all services updated
+
+## 🌟 Features
+
+- Easy user management
+- Automatic security updates
+- Performance monitoring
+- Backup/Restore system
+- Multi-protocol support
+- IP whitelisting
+
+## 📞 Support
+
+- Developer: SMILANS
+- Telegram: @XsSmilanSsX
