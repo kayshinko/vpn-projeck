@@ -89,38 +89,43 @@
 ## 🔌 Port Configuration
 
 ### SSH Ports
-| Service | Port |
-|---------|------|
-| OpenSSH | 22 |
-| Dropbear | 143, 109 |
-| SSH WS | 80 |
-| SSH WS SSL | 443 |
+
+| Service    | Port     |
+| ---------- | -------- |
+| OpenSSH    | 22       |
+| Dropbear   | 143, 109 |
+| SSH WS     | 80       |
+| SSH WS SSL | 443      |
 
 ### Stunnel5 Ports
-| Service | Port |
-|---------|------|
-| OpenSSH | 447 |
-| Dropbear | 445 |
-| OpenVPN | 990 |
+
+| Service  | Port |
+| -------- | ---- |
+| OpenSSH  | 447  |
+| Dropbear | 445  |
+| OpenVPN  | 990  |
 
 ### Xray Ports
-| Service | Port |
-|---------|------|
-| Vmess WS TLS | 443 |
-| Vmess WS | 80 |
-| Vless WS TLS | 443 |
-| Vless WS | 80 |
-| Trojan | 443 |
+
+| Service      | Port |
+| ------------ | ---- |
+| Vmess WS TLS | 443  |
+| Vmess WS     | 80   |
+| Vless WS TLS | 443  |
+| Vless WS     | 80   |
+| Trojan       | 443  |
 
 ### Web Server Ports
+
 | Service | Port |
-|---------|------|
-| HTTP | 80 |
-| HTTPS | 443 |
+| ------- | ---- |
+| HTTP    | 80   |
+| HTTPS   | 443  |
 
 ## 📦 Required Packages
 
 ### Base System
+
 - curl wget socat
 - net-tools
 - python3 python3-pip
@@ -130,42 +135,50 @@
 - vnstat
 
 ### Web Server
+
 - nginx
 - apache2-utils
 
 ### SSL & Security
+
 - openssl
 - stunnel5 (compiled from source)
 - certbot
 
 ### SSH Services
+
 - openssh-server
 - dropbear
 - squid
 - ws-epro
 
 ### Xray
+
 - xray-core
 - jq (JSON processor)
 
 ## 🛠 Service Management
 
 ### Stunnel5
+
 - [x] Enable on boot
 - [x] Auto restart on failure
 - [x] Status monitoring
 
 ### Xray
+
 - [x] Multi-user support
 - [x] Config backup
 - [x] Performance monitoring
 
 ### Nginx
+
 - [x] Xray reverse proxy
 - [x] SSL termination
 - [x] Web panel server
 
 ### Security
+
 - [x] IP whitelist
 - [x] Fail2ban integration
 - [x] Malicious IP auto-ban
