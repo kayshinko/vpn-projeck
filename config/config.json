@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "system": {
+    "name": "VPN Management System",
+    "timezone": "Asia/Jakarta",
+    "hostname": null,
+    "admin_email": null
+  },
+  "network": {
+    "default_interface": null,
+    "ip_whitelist": []
+  },
+  "services": {
+    "ssh": {
+      "port": 22,
+      "max_users": 50,
+      "allowed_methods": ["password", "key"]
+    },
+    "dropbear": {
+      "ports": [109, 143],
+      "max_users": 50
+    },
+    "xray": {
+      "vmess": {
+        "port": 8880,
+        "max_users": 100
+      },
+      "vless": {
+        "port": 8890,
+        "max_users": 100
+      },
+      "trojan": {
+        "port": 8900,
+        "max_users": 100
+      }
+    }
+  },
+  "security": {
+    "fail2ban": {
+      "enabled": true,
+      "max_retries": 3,
+      "ban_time": "1h"
+    },
+    "ssh_key": {
+      "enabled": false,
+      "key_path": null
+    }
+  },
+  "logging": {
+    "level": "info",
+    "rotation": {
+      "max_size": "100M",
+      "max_files": 5
+    }
+  },
+  "backup": {
+    "enabled": true,
+    "schedule": "daily",
+    "keep_days": 7
+  }
+}
