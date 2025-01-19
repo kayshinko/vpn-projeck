@@ -186,8 +186,8 @@
 ## 📝 Installation
 
 ```bash
-git clone https://github.com/kayshinko/vpn-projeck.git /root/vpn
-cd /root/vpn/setup
+git clone https://github.com/kayshinko/vpn-projeck.git /usr/local/vpn
+cd /usr/local/vpn/setup
 chmod +x install.sh
 ./install.sh
 ```
