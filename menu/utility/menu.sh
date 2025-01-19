@@ -1,5 +1,5 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
@@ -7,7 +7,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 
 # Path
-SCRIPT_DIR="/root/vpn"
+SCRIPT_DIR="/usr/local/vpn"
 MENU_DIR="$SCRIPT_DIR/menu/utility"
 
 # Function clear screen
@@ -95,7 +95,7 @@ update_scripts() {
     apt-get install -y git
 
     # Backup existing scripts
-    backup_dir="/root/vpn-backup-$(date +%Y%m%d%H%M%S)"
+    backup_dir="/usr/local/vpn-backup-$(date +%Y%m%d%H%M%S)"
     mkdir -p "$backup_dir"
     cp -r "$SCRIPT_DIR" "$backup_dir"
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -7,8 +7,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Path
-SCRIPT_DIR="/root/vpn"
-LOG_DIR="/root/vpn/logs"
+SCRIPT_DIR="/usr/local/vpn"
+LOG_DIR="$SCRIPT_DIR/logs"
 
 # Function to view logs
 view_logs() {

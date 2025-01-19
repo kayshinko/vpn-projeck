@@ -1,45 +1,51 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
-# Path
-SCRIPT_DIR="/root/vpn"
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+
+# Paths
+SCRIPT_DIR="/usr/local/vpn"
 TROJAN_DB="$SCRIPT_DIR/config/xray/trojan-users.db"
-XRAY_CONFIG="$SCRIPT_DIR/config/xray/trojan.json"
 
-# Set timezone to Asia/Jakarta
-export TZ='Asia/Jakarta'
-
-# Function untuk menampilkan daftar user Trojan
-list_trojan_users() {
+# Function to extend Trojan user
+extend_trojan_user() {
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Trojan Users List ($(date '+%Y-%m-%d %H:%M:%S %Z'))"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║                  Extend Trojan User                         ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
 
-    # Check if database exists
-    if [[ ! -f "$TROJAN_DB" ]]; then
-        echo -e "${RED}Trojan user database not found!${NC}"
+    # Check if database is empty
+    if [[ ! -s "$TROJAN_DB" ]]; then
+        echo -e "${RED}No Trojan users found in the database${NC}"
+        read -n 1 -s -r -p "Press any key to continue"
         return 1
     fi
 
-    # Get Trojan port
-    port=$(grep '"port":' "$XRAY_CONFIG" | cut -d':' -f2 | tr -d ' ,')
+    # List users with details
+    echo -e "${YELLOW}Existing Trojan Users:${NC}"
+    echo -e "───────────────────────────────────────────────────────────"
 
-    # Print header
-    printf "%-20s %-20s %-20s %-15s\n" "Username" "Password" "Expiration Date" "Status"
-    echo "────────────────────────────────────────────────────────────────────────────────"
+    # Use a counter to number the users and store details
+    declare -a users_array
+    counter=0
 
-    # Process each user
+    # Read and process user entries
     while read -r line; do
         # Skip empty or comment lines
         [[ -z "$line" || "$line" == \#* ]] && continue
 
-        # Extract username, expiration date, and password
+        # Extract user details
         username=$(echo "$line" | awk '{print $2}')
         exp_date=$(echo "$line" | awk '{print $3}')
         password=$(echo "$line" | awk '{print $4}')
+        # Default to 2 if no limit is stored (compatibility with previous versions)
+        max_login=$(echo "$line" | awk '{print $5 ? $5 : 2}')
+
+        # Increment counter
+        ((counter++))
 
         # Calculate days remaining
         days_remaining=$((($(date -d "$exp_date" +%s) - $(date +%s)) / 86400))
@@ -48,26 +54,95 @@ list_trojan_users() {
         if [[ "$days_remaining" -lt 0 ]]; then
             status="${RED}Expired${NC}"
         elif [[ "$days_remaining" -le 3 ]]; then
-            status="${RED}Expiring Soon${NC}"
+            status="${YELLOW}Expiring Soon${NC}"
         else
             status="${GREEN}Active${NC}"
         fi
 
-        # Print user details
-        printf "%-20s %-20s %-20s %-15s\n" "$username" "$password" "$exp_date" "$status"
+        # Store user details in an array
+        users_array[$counter]="$line"
 
+        # Print numbered list
+        printf "[%2d] %-15s | Expires: %-15s | Max Login: %-5s | Status: %s\n" \
+            "$counter" "$username" "$exp_date" "$max_login" "$status"
     done < <(grep "^### " "$TROJAN_DB")
 
-    # Footer
-    echo "────────────────────────────────────────────────────────────────────────────────"
+    # Check if any users were found
+    if [[ $counter -eq 0 ]]; then
+        echo -e "${RED}No Trojan users found${NC}"
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    fi
 
-    # Additional system info
-    echo -e "\nTrojan Port: $port"
-    echo -e "Current Date & Time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-    echo -e "Total Trojan Users: $(grep -c "^### " "$TROJAN_DB")"
+    echo -e "───────────────────────────────────────────────────────────"
+
+    # Prompt for user selection
+    read -p "Enter the number of the user to extend [1-$counter]: " user_number
+
+    # Validate user selection
+    if [[ ! "$user_number" =~ ^[0-9]+$ ]] || [[ "$user_number" -lt 1 ]] || [[ "$user_number" -gt $counter ]]; then
+        echo -e "${RED}Invalid selection${NC}"
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    fi
+
+    # Get selected user details
+    selected_user="${users_array[$user_number]}"
+    username=$(echo "$selected_user" | awk '{print $2}')
+    current_exp=$(echo "$selected_user" | awk '{print $3}')
+    password=$(echo "$selected_user" | awk '{print $4}')
+    # Default to 2 if no limit is stored
+    current_max_login=$(echo "$selected_user" | awk '{print $5 ? $5 : 2}')
+
+    # Input extension duration
+    while true; do
+        read -p "Extend duration (days) : " duration
+        if [[ "$duration" =~ ^[0-9]+$ ]] && [ "$duration" -gt 0 ]; then
+            break
+        else
+            echo -e "${RED}Please enter a valid number of days${NC}"
+        fi
+    done
+
+    # Calculate new expiry date
+    new_exp=$(date -d "$current_exp +${duration} days" +"%Y-%m-%d")
+
+    # Prompt to change max login
+    read -p "Current max login is $current_max_login. Do you want to change it? [y/N] : " change_login
+
+    if [[ "$change_login" =~ ^[Yy]$ ]]; then
+        while true; do
+            read -p "Enter new max login limit : " new_max_login
+            if [[ "$new_max_login" =~ ^[0-9]+$ ]] && [ "$new_max_login" -gt 0 ]; then
+                break
+            else
+                echo -e "${RED}Please enter a valid number${NC}"
+            fi
+        done
+    else
+        new_max_login=$current_max_login
+    fi
+
+    # Update database (for entries with limit)
+    sed -i "s/^### $username $current_exp .*/### $username $new_exp $password $new_max_login/" "$TROJAN_DB"
+
+    # Show configuration
+    clear
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║               Trojan Account Extended                       ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
+
+    echo -e "\n${YELLOW}Extension Details:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Username      : $username"
+    echo -e " Old Expiry    : $current_exp"
+    echo -e " New Expiry    : $new_exp"
+    echo -e " Max Login     : $new_max_login"
+    echo -e " Status        : ${GREEN}Successfully Extended${NC}"
+    echo -e "└───────────────────────────────────────────────┘"
 
     read -n 1 -s -r -p "Press any key to continue"
 }
 
 # Run function
-list_trojan_users
+extend_trojan_user

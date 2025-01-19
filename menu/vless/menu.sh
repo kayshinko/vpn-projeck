@@ -1,5 +1,5 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
@@ -8,17 +8,18 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 LIGHT='\033[0;37m'
-# Path
-SCRIPT_DIR="/root/vpn"
+
+# Paths
+SCRIPT_DIR="/usr/local/vpn"
 VLESS_DB="$SCRIPT_DIR/config/xray/vless-users.db"
 MENU_DIR="$SCRIPT_DIR/menu/vless"
 
 # Function clear screen
 clear_screen() {
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
     echo -e " Vless User Management"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+    echo -e "${BLUE}╘═══════════════════════════════════════════════════════════╛${NC}"
 }
 
 # Function untuk menampilkan menu
@@ -27,7 +28,7 @@ show_menu() {
     echo -e "Vless Service Information:"
     echo -e "───────────────────────────────────────────────────────────"
     echo -e " • Status Xray : $(systemctl is-active xray)"
-    echo -e " • Vless Port : $(grep -m 1 '"port":' $SCRIPT_DIR/config/xray/vless.json | cut -d':' -f2 | tr -d ' ,')"
+    echo -e " • Vless Port : $(grep -m 1 '"port":' "$SCRIPT_DIR/config/xray/vless.json" | cut -d':' -f2 | tr -d ' ,')"
     echo -e " • Total Vless Users : $(grep -c "^### " "$VLESS_DB" 2>/dev/null || echo "0")"
     echo -e "───────────────────────────────────────────────────────────"
     echo -e "Menu Options:"

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Path
-SCRIPT_DIR="/root/vpn"
+SCRIPT_DIR="/usr/local/vpn"
 DOMAIN_CONFIG="$SCRIPT_DIR/config/domain.conf"
 XRAY_DIR="$SCRIPT_DIR/config/xray"
 NGINX_CONFIG="/etc/nginx/sites-available/default"

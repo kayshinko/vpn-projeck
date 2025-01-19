@@ -1,109 +1,175 @@
 #!/bin/bash
-# Warna
+
+# Colors
 RED='\033[0;31m'
-NC='\033[0m'
 GREEN='\033[0;32m'
-# Path
-SCRIPT_DIR="/root/vpn"
-SSH_DB="$SCRIPT_DIR/config/ssh-users.db"
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Function untuk menghapus user
-del_ssh_user() {
-    clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Delete SSH User"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+# Paths
+VPN_DIR="/usr/local/vpn"
+CONFIG_DIR="$VPN_DIR/config"
+SSH_DB="$CONFIG_DIR/ssh-users.db"
+OVPN_DIR="$CONFIG_DIR/openvpn"
 
-    # Check if database is empty
-    if [[ ! -s "$SSH_DB" ]]; then
+# Function to check if database exists and is not empty
+check_database() {
+    if [ ! -f "$SSH_DB" ] || [ ! -s "$SSH_DB" ]; then
         echo -e "${RED}No SSH users found in the database${NC}"
-        read -n 1 -s -r -p "Press any key to continue"
         return 1
     fi
+    return 0
+}
 
-    # List users with numbers
-    echo -e "Existing SSH Users:"
-    echo -e "───────────────────────────────────────────────────────────"
-    # Use a counter to number the users
-    counter=0
-    while read -r line; do
-        # Skip empty or comment lines
+# Function to get user status
+get_user_status() {
+    local exp_date=$1
+    local days_remaining=$((($(date -d "$exp_date" +%s) - $(date +%s)) / 86400))
+
+    if [[ "$days_remaining" -lt 0 ]]; then
+        echo "${RED}Expired${NC}"
+    elif [[ "$days_remaining" -le 3 ]]; then
+        echo "${YELLOW}Expiring Soon (${days_remaining}d)${NC}"
+    else
+        echo "${GREEN}Active (${days_remaining}d)${NC}"
+    fi
+}
+
+# Function to list users
+list_users() {
+    local counter=0
+    declare -A user_details
+
+    echo -e "\n${YELLOW}Existing SSH Users:${NC}"
+    echo -e "┌─────────────────────────────────────────────────────────────┐"
+    printf "%-4s %-15s %-15s %-25s\n" "No." "Username" "Expiry Date" "Status"
+    echo -e "├─────────────────────────────────────────────────────────────┤"
+
+    while IFS= read -r line; do
         [[ -z "$line" || "$line" == \#* ]] && continue
 
-        # Extract username and expiration date
         username=$(echo "$line" | awk '{print $2}')
         exp_date=$(echo "$line" | awk '{print $3}')
-
-        # Increment counter
         ((counter++))
 
-        # Calculate days remaining
-        days_remaining=$((($(date -d "$exp_date" +%s) - $(date +%s)) / 86400))
+        # Store user details
+        user_details["$counter"]="$line"
 
-        # Determine status
-        if [[ "$days_remaining" -lt 0 ]]; then
-            status="${RED}Expired${NC}"
-        elif [[ "$days_remaining" -le 3 ]]; then
-            status="${RED}Expiring Soon${NC}"
-        else
-            status="${GREEN}Active${NC}"
-        fi
+        # Get status
+        status=$(get_user_status "$exp_date")
 
-        # Store user details in an array
-        users_array[$counter]="$line"
-
-        # Print numbered list
-        printf "[%2d] %-15s | Expires: %-15s | Status: %s\n" "$counter" "$username" "$exp_date" "$status"
+        printf "%-4s %-15s %-15s %-25s\n" "[$counter]" "$username" "$exp_date" "$status"
     done < <(grep "^### " "$SSH_DB")
 
-    # Check if any users were found
+    echo -e "└─────────────────────────────────────────────────────────────┘"
+
     if [[ $counter -eq 0 ]]; then
         echo -e "${RED}No SSH users found${NC}"
+        return 1
+    fi
+
+    echo -e "\nTotal users: $counter"
+    return 0
+}
+
+# Function to delete user
+delete_user() {
+    local username=$1
+    local exp_date=$2
+
+    # Delete system user
+    userdel -r "$username" 2>/dev/null
+
+    # Remove from database
+    sed -i "/^### $username /d" "$SSH_DB"
+
+    # Remove OpenVPN config if exists
+    rm -f "$OVPN_DIR/$username.ovpn" 2>/dev/null
+
+    # Remove any associated files
+    rm -f "/etc/openvpn/client/$username" 2>/dev/null
+    rm -f "/var/log/openvpn/$username.log" 2>/dev/null
+
+    # Kill user sessions
+    pkill -u "$username" 2>/dev/null
+
+    return 0
+}
+
+# Function to show deletion result
+show_deletion_result() {
+    local username=$1
+    local exp_date=$2
+
+    clear
+    echo -e "${BLUE}╔═══════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║             SSH User Deleted                   ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════╝${NC}"
+
+    echo -e "\n${YELLOW}Deletion Details:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Username     : $username"
+    echo -e " Expiry Date  : $exp_date"
+    echo -e " Status       : ${GREEN}Successfully Deleted${NC}"
+    echo -e "└───────────────────────────────────────────────┘"
+}
+
+# Main function
+main() {
+    clear
+    echo -e "${BLUE}╔═══════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║            Delete SSH User                     ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════╝${NC}"
+
+    # Check database
+    check_database || {
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    }
+
+    # List users
+    list_users || {
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    }
+
+    # Get user selection
+    echo -e "\n${YELLOW}User Deletion:${NC}"
+    read -p "Enter the number of user to delete: " user_number
+
+    # Validate selection
+    if ! grep -q "^### " "$SSH_DB" 2>/dev/null; then
+        echo -e "${RED}No users found in database${NC}"
         read -n 1 -s -r -p "Press any key to continue"
         return 1
     fi
 
-    echo -e "───────────────────────────────────────────────────────────"
-    # Prompt for user selection
-    read -p "Enter the number of the user to delete [1-$counter]: " user_number
+    # Get selected user
+    selected_line=$(sed -n "${user_number}p" <(grep "^### " "$SSH_DB"))
 
-    # Validate user selection
-    if [[ ! "$user_number" =~ ^[0-9]+$ ]] || [[ "$user_number" -lt 1 ]] || [[ "$user_number" -gt $counter ]]; then
+    if [ -z "$selected_line" ]; then
         echo -e "${RED}Invalid selection${NC}"
         read -n 1 -s -r -p "Press any key to continue"
         return 1
     fi
 
-    # Get selected user details
-    selected_user="${users_array[$user_number]}"
-    username=$(echo "$selected_user" | awk '{print $2}')
-    exp_date=$(echo "$selected_user" | awk '{print $3}')
+    username=$(echo "$selected_line" | awk '{print $2}')
+    exp_date=$(echo "$selected_line" | awk '{print $3}')
 
     # Confirm deletion
-    read -p "Are you sure want to delete user $username? [y/N] : " confirm
-    if [[ "$confirm" != [Yy]* ]]; then
-        echo -e "${RED}Deletion cancelled${NC}"
-        read -n 1 -s -r -p "Press any key to continue"
-        return 1
+    echo -e "\nSelected user: ${YELLOW}$username${NC} (Expires: $exp_date)"
+    read -p "Are you sure you want to delete this user? [y/N]: " confirm
+
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        delete_user "$username" "$exp_date" &&
+            show_deletion_result "$username" "$exp_date"
+    else
+        echo -e "${YELLOW}Deletion cancelled${NC}"
     fi
-
-    # Delete system user
-    userdel "$username" 2>/dev/null
-
-    # Remove from database
-    sed -i "/^### $username $exp_date$/d" "$SSH_DB"
-
-    # Show confirmation
-    clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " SSH User Deleted"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
-    echo -e "Username : $username"
-    echo -e "Expiry Date : $exp_date"
-    echo -e "Status : ${GREEN}Successfully Deleted${NC}"
 
     read -n 1 -s -r -p "Press any key to continue"
 }
 
-# Run function
-del_ssh_user
+# Run main function
+main

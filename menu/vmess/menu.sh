@@ -8,8 +8,9 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 LIGHT='\033[0;37m'
+
 # Path
-SCRIPT_DIR="/root/vpn"
+SCRIPT_DIR="/usr/local/vpn"
 VMESS_DB="$SCRIPT_DIR/config/xray/vmess-users.db"
 MENU_DIR="$SCRIPT_DIR/menu/vmess"
 
@@ -27,7 +28,7 @@ show_menu() {
     echo -e "Vmess Service Information:"
     echo -e "───────────────────────────────────────────────────────────"
     echo -e " • Status Xray : $(systemctl is-active xray)"
-    echo -e " • Vmess Port : $(grep -m 1 '"port":' $SCRIPT_DIR/config/xray/vmess.json | cut -d':' -f2 | tr -d ' ,')"
+    echo -e " • Vmess Port : $(grep -m 1 '"port":' "$SCRIPT_DIR/config/xray/vmess.json" | cut -d':' -f2 | tr -d ' ,')"
     echo -e " • Total Vmess Users : $(grep -c "^### " "$VMESS_DB" 2>/dev/null || echo "0")"
     echo -e "───────────────────────────────────────────────────────────"
     echo -e "Menu Options:"

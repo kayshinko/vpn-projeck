@@ -1,145 +1,160 @@
 #!/bin/bash
 
-# Warna
+# Colors
 RED='\033[0;31m'
-NC='\033[0m'
 GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
+YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 LIGHT='\033[0;37m'
+NC='\033[0m'
 
-# Path
-SCRIPT_DIR="/root/vpn"
-CONFIG_DIR="$SCRIPT_DIR/config"
-MENU_DIR="$SCRIPT_DIR/menu"
+# Paths
+VPN_DIR="/usr/local/vpn"
+CONFIG_DIR="$VPN_DIR/config"
+MENU_DIR="$VPN_DIR/menu"
 
-# Informasi Sistem
-HOSTNAME=$(hostname)
-IPADDR=$(curl -s ipv4.icanhazip.com)
-ISP=$(curl -s ipinfo.io/org)
-CITY=$(curl -s ipinfo.io/city)
-WKT=$(curl -s ipinfo.io/timezone)
-DATE=$(date +%Y-%m-%d)
-UPTIME=$(uptime -p | cut -d " " -f 2-10)
-OS=$(cat /etc/os-release | grep -w PRETTY_NAME | head -n1 | sed 's/=//g' | sed 's/"//g' | sed 's/PRETTY_NAME//g')
+# Load system information
+load_system_info() {
+    HOSTNAME=$(hostname)
+    IPADDR=$(curl -s ipv4.icanhazip.com)
+    ISP=$(curl -s ipinfo.io/org | tr -d '"')
+    CITY=$(curl -s ipinfo.io/city | tr -d '"')
+    TIMEZONE=$(curl -s ipinfo.io/timezone | tr -d '"')
+    UPTIME=$(uptime -p | cut -d " " -f 2-10)
+    OS=$(. /etc/os-release && echo "$PRETTY_NAME")
+    KERNEL=$(uname -r)
+    MEMORY=$(free -m | awk 'NR==2{printf "%.2f/%.2f GB (%.2f%%)", $3/1024, $2/1024, $3*100/$2}')
+    DISK=$(df -h / | awk 'NR==2{printf "%s/%s (%s)", $3, $2, $5}')
+    CPU_LOAD=$(top -bn1 | grep "Cpu(s)" | awk '{printf "%.1f%%", $2}')
+    DOMAIN=$(cat $CONFIG_DIR/domain.conf 2>/dev/null || echo 'Not Set')
+}
 
-# Function untuk status service
+# Check service status
 status_service() {
     if systemctl is-active --quiet $1; then
-        echo -e "${GREEN}ON${NC}"
+        echo -e "${GREEN}●${NC}"
     else
-        echo -e "${RED}OFF${NC}"
+        echo -e "${RED}●${NC}"
     fi
 }
 
-# Function clear screen
-clear_screen() {
+# Get service port
+get_service_port() {
+    case $1 in
+    "ssh") port=$(grep -E "^Port" /etc/ssh/sshd_config | awk '{print $2}') ;;
+    "dropbear") port=$(grep -E "^DROPBEAR_PORT" /etc/default/dropbear | cut -d '=' -f2) ;;
+    "stunnel") port=$(grep "accept" $CONFIG_DIR/stunnel5/stunnel5.conf | head -1 | awk '{print $3}') ;;
+    "xray") port=$(grep -A1 '"port":' /etc/xray/config.json | tail -1 | tr -d ', ' | awk '{print $1}') ;;
+    *) port="N/A" ;;
+    esac
+    echo $port
+}
+
+# Display header
+show_header() {
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e "        Welcome to SMILANS VPN Manager - $(date '+%Y-%m-%d %H:%M:%S')"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+    echo -e "${BLUE}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║               VPN Management System                        ║${NC}"
+    echo -e "${BLUE}║           $(date '+%Y-%m-%d %H:%M:%S')                    ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
 }
 
-# Function untuk menampilkan menu
-show_menu() {
-    clear_screen
-    echo -e "System Information:"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e "  OS            : $OS"
-    echo -e "  IP Address    : $IPADDR"
-    echo -e "  ISP           : $ISP"
-    echo -e "  City          : $CITY"
-    echo -e "  Uptime        : $UPTIME"
-    echo -e "  Domain        : $(cat $CONFIG_DIR/domain.conf 2>/dev/null || echo 'Not Set')"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e "Service Status:"
-    echo -e "  SSH           : $(status_service ssh)"
-    echo -e "  Dropbear      : $(status_service dropbear)"
-    echo -e "  Stunnel5      : $(status_service stunnel5)"
-    echo -e "  Xray          : $(status_service xray)"
-    echo -e "  Nginx         : $(status_service nginx)"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e "Menu Options:"
-    echo -e " [1] SSH Menu          [5] Utility Menu"
-    echo -e " [2] VMess Menu        [6] Monitor Menu"
-    echo -e " [3] VLess Menu        [7] Settings"
-    echo -e " [4] Trojan Menu       [8] Exit"
-    echo -e "───────────────────────────────────────────────────────────"
-    read -p "Select menu [1-8]: " menu_option
+# Display system information
+show_system_info() {
+    load_system_info
+    echo -e "\n${YELLOW}System Information:${NC}"
+    echo -e "┌─────────────────────────────────────────────────────────┐"
+    echo -e " OS Version    : $OS"
+    echo -e " Kernel       : $KERNEL"
+    echo -e " IP Address   : $IPADDR"
+    echo -e " ISP          : $ISP"
+    echo -e " Location     : $CITY"
+    echo -e " Domain       : $DOMAIN"
+    echo -e " CPU Load     : $CPU_LOAD"
+    echo -e " Memory Usage : $MEMORY"
+    echo -e " Disk Usage   : $DISK"
+    echo -e " Uptime      : $UPTIME"
+    echo -e "└─────────────────────────────────────────────────────────┘"
 }
 
-# Function untuk menjalankan menu
-run_menu() {
-    case $menu_option in
-    1)
-        bash $MENU_DIR/ssh/menu.sh
-        ;;
-    2)
-        bash $MENU_DIR/vmess/menu.sh
-        ;;
-    3)
-        bash $MENU_DIR/vless/menu.sh
-        ;;
-    4)
-        bash $MENU_DIR/trojan/menu.sh
-        ;;
-    5)
-        bash $MENU_DIR/utility/menu.sh
-        ;;
-    6)
-        bash $MENU_DIR/monitor/menu.sh
-        ;;
-    7)
-        settings_menu
-        ;;
+# Display service status
+show_service_status() {
+    echo -e "\n${YELLOW}Service Status:${NC}"
+    echo -e "┌─────────────────────────────────────────────────────────┐"
+    printf " %-15s : %s  Port: %-10s\n" "SSH" "$(status_service ssh)" "$(get_service_port ssh)"
+    printf " %-15s : %s  Port: %-10s\n" "Dropbear" "$(status_service dropbear)" "$(get_service_port dropbear)"
+    printf " %-15s : %s  Port: %-10s\n" "Stunnel5" "$(status_service stunnel5)" "$(get_service_port stunnel)"
+    printf " %-15s : %s  Port: %-10s\n" "Xray" "$(status_service xray)" "$(get_service_port xray)"
+    printf " %-15s : %s\n" "Nginx" "$(status_service nginx)"
+    echo -e "└─────────────────────────────────────────────────────────┘"
+}
+
+# Display menu options
+show_menu_options() {
+    echo -e "\n${YELLOW}Menu Options:${NC}"
+    echo -e "┌─────────────────────────────────────────────────────────┐"
+    echo -e " [${GREEN}1${NC}] SSH Menu          [${GREEN}5${NC}] Utility Menu"
+    echo -e " [${GREEN}2${NC}] VMess Menu        [${GREEN}6${NC}] Monitor Menu"
+    echo -e " [${GREEN}3${NC}] VLess Menu        [${GREEN}7${NC}] Settings"
+    echo -e " [${GREEN}4${NC}] Trojan Menu       [${GREEN}8${NC}] Exit"
+    echo -e "└─────────────────────────────────────────────────────────┘"
+}
+
+# Execute menu option
+execute_menu() {
+    case $1 in
+    1) bash $MENU_DIR/ssh/menu.sh ;;
+    2) bash $MENU_DIR/vmess/menu.sh ;;
+    3) bash $MENU_DIR/vless/menu.sh ;;
+    4) bash $MENU_DIR/trojan/menu.sh ;;
+    5) bash $MENU_DIR/utility/menu.sh ;;
+    6) bash $MENU_DIR/monitor/menu.sh ;;
+    7) settings_menu ;;
     8)
-        echo -e "Thank you for using SMILANS VPN Manager"
+        clear
         exit 0
         ;;
     *)
-        echo -e "${RED}Please enter a valid option${NC}"
-        sleep 2
+        echo -e "${RED}Invalid option${NC}"
+        sleep 1
         ;;
     esac
 }
 
-# Settings Menu
+# Settings menu
 settings_menu() {
-    clear_screen
-    echo -e "Settings Menu:"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e " [1] Change Domain"
-    echo -e " [2] Change Port"
-    echo -e " [3] Update Script"
-    echo -e " [4] Back to Main Menu"
-    echo -e "───────────────────────────────────────────────────────────"
-    read -p "Select option [1-4]: " settings_option
+    while true; do
+        show_header
+        echo -e "\n${YELLOW}Settings Menu:${NC}"
+        echo -e "┌─────────────────────────────────────────────────────────┐"
+        echo -e " [${GREEN}1${NC}] Change Domain"
+        echo -e " [${GREEN}2${NC}] Change Port"
+        echo -e " [${GREEN}3${NC}] Update Script"
+        echo -e " [${GREEN}4${NC}] Back to Main Menu"
+        echo -e "└─────────────────────────────────────────────────────────┘"
 
-    case $settings_option in
-    1)
-        bash $MENU_DIR/utility/domain.sh
-        ;;
-    2)
-        bash $MENU_DIR/utility/port.sh
-        ;;
-    3)
-        bash $MENU_DIR/utility/update.sh
-        ;;
-    4)
-        return
-        ;;
-    *)
-        echo -e "${RED}Please enter a valid option${NC}"
-        sleep 2
-        settings_menu
-        ;;
-    esac
+        read -p "Select option [1-4]: " settings_option
+        case $settings_option in
+        1) bash $MENU_DIR/utility/domain.sh ;;
+        2) bash $MENU_DIR/utility/port.sh ;;
+        3) bash $MENU_DIR/utility/update.sh ;;
+        4) break ;;
+        *)
+            echo -e "${RED}Invalid option${NC}"
+            sleep 1
+            ;;
+        esac
+    done
 }
 
-# Main Loop
+# Main menu loop
 while true; do
-    show_menu
-    run_menu
+    show_header
+    show_system_info
+    show_service_status
+    show_menu_options
+    read -p "Select menu [1-8]: " menu_option
+    execute_menu $menu_option
 done

@@ -1,13 +1,13 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Backup Directory
-BACKUP_BASE_DIR="/root/vpn-backups"
-SCRIPT_DIR="/root/vpn"
+BACKUP_BASE_DIR="/usr/local/vpn-backups"
+SCRIPT_DIR="/usr/local/vpn"
 
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_BASE_DIR"

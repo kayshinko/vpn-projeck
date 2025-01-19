@@ -1,18 +1,21 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
-# Path
-SCRIPT_DIR="/root/vpn"
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+
+# Paths
+SCRIPT_DIR="/usr/local/vpn"
 VLESS_DB="$SCRIPT_DIR/config/xray/vless-users.db"
 
-# Function untuk menghapus user Vless
+# Function to delete Vless user
 del_vless_user() {
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Delete Vless User"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║                  Delete Vless User                         ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
 
     # Check if database is empty
     if [[ ! -s "$VLESS_DB" ]]; then
@@ -21,18 +24,24 @@ del_vless_user() {
         return 1
     fi
 
-    # List users with numbers
-    echo -e "Existing Vless Users:"
+    # List users with details
+    echo -e "${YELLOW}Existing Vless Users:${NC}"
     echo -e "───────────────────────────────────────────────────────────"
-    # Use a counter to number the users
+
+    # Use a counter to number the users and store details
+    declare -a users_array
     counter=0
+
+    # Read and process user entries
     while read -r line; do
         # Skip empty or comment lines
         [[ -z "$line" || "$line" == \#* ]] && continue
 
-        # Extract username and expiration date
+        # Extract user details
         username=$(echo "$line" | awk '{print $2}')
         exp_date=$(echo "$line" | awk '{print $3}')
+        # Default to 2 if no limit is stored (compatibility with previous versions)
+        max_login=$(echo "$line" | awk '{print $4 ? $4 : 2}')
 
         # Increment counter
         ((counter++))
@@ -44,7 +53,7 @@ del_vless_user() {
         if [[ "$days_remaining" -lt 0 ]]; then
             status="${RED}Expired${NC}"
         elif [[ "$days_remaining" -le 3 ]]; then
-            status="${RED}Expiring Soon${NC}"
+            status="${YELLOW}Expiring Soon${NC}"
         else
             status="${GREEN}Active${NC}"
         fi
@@ -53,8 +62,8 @@ del_vless_user() {
         users_array[$counter]="$line"
 
         # Print numbered list
-        printf "[%2d] %-15s | Expires: %-15s | Status: %s\n" "$counter" "$username" "$exp_date" "$status"
-
+        printf "[%2d] %-15s | Expires: %-15s | Max Login: %-5s | Status: %s\n" \
+            "$counter" "$username" "$exp_date" "$max_login" "$status"
     done < <(grep "^### " "$VLESS_DB")
 
     # Check if any users were found
@@ -65,6 +74,7 @@ del_vless_user() {
     fi
 
     echo -e "───────────────────────────────────────────────────────────"
+
     # Prompt for user selection
     read -p "Enter the number of the user to delete [1-$counter]: " user_number
 
@@ -79,9 +89,11 @@ del_vless_user() {
     selected_user="${users_array[$user_number]}"
     username=$(echo "$selected_user" | awk '{print $2}')
     exp_date=$(echo "$selected_user" | awk '{print $3}')
+    max_login=$(echo "$selected_user" | awk '{print $4 ? $4 : 2}')
 
     # Confirm deletion
-    read -p "Are you sure want to delete user $username? [y/N] : " confirm
+    read -p "Are you sure you want to delete user $username? [y/N] : " confirm
+
     if [[ "$confirm" != [Yy]* ]]; then
         echo -e "${RED}Deletion cancelled${NC}"
         read -n 1 -s -r -p "Press any key to continue"
@@ -93,12 +105,17 @@ del_vless_user() {
 
     # Show confirmation
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Vless User Deleted"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
-    echo -e "Username : $username"
-    echo -e "Expiry Date : $exp_date"
-    echo -e "Status : ${GREEN}Successfully Deleted${NC}"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║                Vless User Deleted                          ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
+
+    echo -e "\n${YELLOW}Deletion Details:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Username     : $username"
+    echo -e " Expiry Date  : $exp_date"
+    echo -e " Max Login    : $max_login"
+    echo -e " Status       : ${GREEN}Successfully Deleted${NC}"
+    echo -e "└───────────────────────────────────────────────┘"
 
     read -n 1 -s -r -p "Press any key to continue"
 }

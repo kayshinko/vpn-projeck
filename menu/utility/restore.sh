@@ -1,13 +1,13 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Backup Directory
-BACKUP_BASE_DIR="/root/vpn-backups"
-SCRIPT_DIR="/root/vpn"
+BACKUP_BASE_DIR="/usr/local/vpn-backups"
+SCRIPT_DIR="/usr/local/vpn"
 
 # Function untuk restore
 restore_system() {
@@ -26,7 +26,6 @@ restore_system() {
     # List available backups
     echo -e "${YELLOW}Available Backups:${NC}"
     backups=($(ls -t "$BACKUP_BASE_DIR"/vpn-backup-*.tar.gz))
-
     for i in "${!backups[@]}"; do
         printf "[%2d] %s\n" $((i + 1)) "$(basename "${backups[i]}")"
     done
@@ -49,7 +48,6 @@ restore_system() {
     # Confirm restore
     echo -e "${YELLOW}WARNING: This will overwrite existing configurations!${NC}"
     read -p "Are you sure you want to restore from $(basename "$selected_backup")? [y/N]: " confirm
-
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo -e "${RED}Restore cancelled.${NC}"
         read -n 1 -s -r -p "Press any key to continue"

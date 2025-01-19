@@ -7,12 +7,11 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Paths
-VPN_DIR="/root/vpn"
+VPN_DIR="/usr/local/vpn"
 CERT_DIR="$VPN_DIR/cert"
 CONFIG_DIR="$VPN_DIR/config"
-
-# Cloudflare API Configuration File
-CLOUDFLARE_CONFIG="$CONFIG_DIR/cloudflare.conf"
+DOMAIN_CONF="$CONFIG_DIR/domain.conf"
+XRAY_CONFIG_DIR="$CONFIG_DIR/xray"
 
 # Ensure script is run as root
 if [[ $EUID -ne 0 ]]; then
@@ -20,148 +19,144 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# Function to validate domain
-validate_domain() {
-    local domain="$1"
-    # Basic domain validation regex
-    if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$ ]]; then
+# Function to validate subdomain format
+validate_subdomain() {
+    local subdomain="$1"
+    if [[ ! "$subdomain" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}$ ]]; then
         return 1
     fi
     return 0
 }
 
-# Function to install Certbot
+# Function to update all configuration files with new domain
+update_domain_configs() {
+    local domain="$1"
+
+    # Update domain.conf
+    echo "$domain" >"$DOMAIN_CONF"
+    chmod 600 "$DOMAIN_CONF"
+
+    # Update Xray configurations
+    if [ -d "$XRAY_CONFIG_DIR" ]; then
+        for config in "$XRAY_CONFIG_DIR"/*.json; do
+            if [ -f "$config" ]; then
+                sed -i "s/\"host\": \".*\"/\"host\": \"$domain\"/" "$config"
+                sed -i "s/\"serverName\": \".*\"/\"serverName\": \"$domain\"/" "$config"
+                chmod 600 "$config"
+            fi
+        done
+    fi
+
+    # Update Nginx configuration
+    local nginx_conf="/etc/nginx/conf.d/xray.conf"
+    if [ -f "$nginx_conf" ]; then
+        sed -i "s/server_name .*;/server_name $domain;/" "$nginx_conf"
+    fi
+
+    # Update Stunnel configuration
+    local stunnel_conf="$CONFIG_DIR/stunnel5/stunnel5.conf"
+    if [ -f "$stunnel_conf" ]; then
+        sed -i "s|^cert = .*|cert = /usr/local/vpn/cert/fullchain.pem|" "$stunnel_conf"
+        sed -i "s|^key = .*|key = /usr/local/vpn/cert/privkey.pem|" "$stunnel_conf"
+        chmod 600 "$stunnel_conf"
+    fi
+}
+
+# Function to install certbot if not present
 install_certbot() {
-    echo -e "${YELLOW}Installing Certbot...${NC}"
-    apt-get update
-    apt-get install -y certbot python3-certbot-nginx
+    if ! command -v certbot &>/dev/null; then
+        apt-get update
+        apt-get install -y certbot
+    fi
 }
 
 # Function to request SSL certificate
-request_ssl_certificate() {
-    # Clear screen
-    clear
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║           SSL Certificate Installation               ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
+setup_ssl_certificate() {
+    local subdomain="$1"
 
-    # Domain input with validation
-    while true; do
-        read -p "Enter your domain (e.g., vpn.example.com): " domain
-
-        # Validate domain
-        if validate_domain "$domain"; then
-            # Confirm domain
-            read -p "Confirm domain $domain? [Y/n]: " confirm
-            confirm=${confirm:-Y}
-
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                break
-            fi
-        else
-            echo -e "${RED}Invalid domain format. Please use a valid domain name.${NC}"
-        fi
-    done
-
-    # Additional domain configuration
-    read -p "Add www subdomain? [Y/n]: " add_www
-    add_www=${add_www:-Y}
-
-    # Prepare domain arguments
-    if [[ "$add_www" =~ ^[Yy]$ ]]; then
-        domain_args="-d $domain -d www.$domain"
-    else
-        domain_args="-d $domain"
-    fi
-
-    # Request certificate
-    echo -e "${YELLOW}Requesting SSL Certificate for $domain...${NC}"
-
-    # Install Certbot if not already installed
+    # Install certbot if needed
     install_certbot
 
-    # Request certificate with Nginx validation
-    certbot certonly --nginx $domain_args \
+    # Validate subdomain
+    if ! validate_subdomain "$subdomain"; then
+        echo -e "${RED}Invalid subdomain format: $subdomain${NC}"
+        exit 1
+    fi
+
+    # Update configurations
+    update_domain_configs "$subdomain"
+
+    # Stop services
+    systemctl stop nginx xray stunnel5
+
+    # Request certificate
+    certbot certonly --standalone \
+        -d "$subdomain" \
         --non-interactive \
         --agree-tos \
-        --register-unsafely-without-email
+        --register-unsafely-without-email \
+        --preferred-challenges http
 
-    # Check certificate generation
     if [ $? -eq 0 ]; then
-        # Copy certificates to VPN directory
+        # Create cert directory with proper permissions
         mkdir -p "$CERT_DIR"
-        cp /etc/letsencrypt/live/"$domain"/fullchain.pem "$CERT_DIR/"
-        cp /etc/letsencrypt/live/"$domain"/privkey.pem "$CERT_DIR/"
+        chmod 700 "$CERT_DIR"
 
-        # Update domain configuration
-        echo "$domain" >"$CONFIG_DIR/domain.conf"
+        # Copy and secure certificates
+        cp /etc/letsencrypt/live/"$subdomain"/fullchain.pem "$CERT_DIR/"
+        cp /etc/letsencrypt/live/"$subdomain"/privkey.pem "$CERT_DIR/"
+        chmod 400 "$CERT_DIR"/*.pem
 
-        echo -e "${GREEN}SSL Certificate installed successfully!${NC}"
-        echo -e "Domain: ${YELLOW}$domain${NC}"
-        echo -e "Certificate Location: ${YELLOW}$CERT_DIR${NC}"
+        # Setup auto-renewal
+        cat >/etc/systemd/system/certbot-renewal-hooks.service <<EOF
+[Unit]
+Description=Certbot renewal hooks
+After=network.target
 
-        # Update Nginx configuration
-        update_nginx_config "$domain"
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl stop nginx
+ExecStartPost=/bin/systemctl start nginx
+RemainAfterExit=yes
 
-        return 0
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable certbot-renewal-hooks.service
+
+        # Create renewal hooks
+        mkdir -p /etc/letsencrypt/renewal-hooks/{pre,post}
+
+        echo '#!/bin/bash' >/etc/letsencrypt/renewal-hooks/pre/stop-services.sh
+        echo 'systemctl stop nginx xray stunnel5' >>/etc/letsencrypt/renewal-hooks/pre/stop-services.sh
+
+        echo '#!/bin/bash' >/etc/letsencrypt/renewal-hooks/post/start-services.sh
+        echo 'cp /etc/letsencrypt/live/'"$subdomain"'/*.pem /usr/local/vpn/cert/' >>/etc/letsencrypt/renewal-hooks/post/start-services.sh
+        echo 'chmod 400 /usr/local/vpn/cert/*.pem' >>/etc/letsencrypt/renewal-hooks/post/start-services.sh
+        echo 'systemctl start nginx xray stunnel5' >>/etc/letsencrypt/renewal-hooks/post/start-services.sh
+
+        chmod +x /etc/letsencrypt/renewal-hooks/{pre,post}/*.sh
+
+        # Start services
+        systemctl start nginx xray stunnel5
+
+        clear
+        exit 0
     else
-        echo -e "${RED}Failed to generate SSL Certificate${NC}"
-        return 1
+        systemctl start nginx xray stunnel5
+        echo -e "${RED}Failed to obtain SSL certificate${NC}"
+        exit 1
     fi
 }
 
-# Function to update Nginx configuration
-update_nginx_config() {
-    local domain="$1"
-    local nginx_config="/etc/nginx/conf.d/xray.conf"
+# Check if domain provided as argument
+if [ -z "$1" ]; then
+    echo -e "${RED}Please provide subdomain as argument${NC}"
+    echo -e "Usage: $0 subdomain.domain.tld"
+    exit 1
+fi
 
-    # Check if Nginx configuration exists
-    if [ ! -f "$nginx_config" ]; then
-        echo -e "${YELLOW}Nginx configuration not found. Skipping update.${NC}"
-        return
-    fi
-
-    # Update server_name in Nginx config
-    sed -i "s/server_name .*;/server_name $domain www.$domain;/" "$nginx_config"
-
-    # Restart Nginx to apply changes
-    systemctl restart nginx
-
-    echo -e "${GREEN}Nginx configuration updated for $domain${NC}"
-}
-
-# Main SSL management function
-ssl_management() {
-    clear
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║         SSL and Domain Management                  ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════╝${NC}"
-
-    echo -e "SSL Management Options:"
-    echo -e " [1] Install SSL Certificate"
-    echo -e " [2] Renew Existing Certificate"
-    echo -e " [3] Back to Main Menu"
-
-    read -p "Select an option [1-3]: " ssl_option
-
-    case $ssl_option in
-    1)
-        request_ssl_certificate
-        ;;
-    2)
-        # Renew certificates
-        certbot renew --force-renewal
-        ;;
-    3)
-        return 0
-        ;;
-    *)
-        echo -e "${RED}Invalid option${NC}"
-        ;;
-    esac
-
-    read -n 1 -s -r -p "Press any key to continue..."
-}
-
-# Run the SSL management
-ssl_management
+# Run the SSL setup with provided domain
+setup_ssl_certificate "$1"

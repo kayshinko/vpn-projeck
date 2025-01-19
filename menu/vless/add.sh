@@ -1,40 +1,74 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
-# Path
-SCRIPT_DIR="/root/vpn"
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+
+# Paths
+SCRIPT_DIR="/usr/local/vpn"
 VLESS_DB="$SCRIPT_DIR/config/xray/vless-users.db"
 XRAY_CONFIG="$SCRIPT_DIR/config/xray/vless.json"
 
-# Function untuk membuat UUID
+# Function to validate username
+validate_username() {
+    local username=$1
+    # Check length
+    if [ ${#username} -lt 3 ] || [ ${#username} -gt 32 ]; then
+        echo -e "${RED}Username must be between 3 and 32 characters${NC}"
+        return 1
+    fi
+    # Check characters
+    if ! [[ $username =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo -e "${RED}Username can only contain letters, numbers, hyphen and underscore${NC}"
+        return 1
+    fi
+    # Check if exists in Vless database
+    if grep -q "^### $username" "$VLESS_DB" 2>/dev/null; then
+        echo -e "${RED}Username '$username' already exists${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# Function to generate UUID
 generate_uuid() {
     uuid=$(cat /proc/sys/kernel/random/uuid)
     echo "$uuid"
 }
 
-# Function untuk menambah user Vless
+# Function to add Vless user
 add_vless_user() {
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Add Vless User"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║                    Add Vless User                          ║${NC}"
+    echo -e "${BLUE}╘═══════════════════════════════════════════════════════════╝${NC}"
 
-    # Input username
-    read -p "Username : " username
-
-    # Check if username exists
-    if grep -q "^### $username" "$VLESS_DB" 2>/dev/null; then
-        echo -e "${RED}User $username already exists${NC}"
-        return 1
-    fi
+    # Input and validate username
+    while true; do
+        read -p "Username : " username
+        validate_username "$username" && break
+    done
 
     # Generate UUID
     uuid=$(generate_uuid)
 
     # Input duration (days)
-    read -p "Duration (days) : " duration
+    while true; do
+        read -p "Duration (days) : " duration
+        if [[ "$duration" =~ ^[0-9]+$ ]] && [ "$duration" -gt 0 ]; then
+            break
+        else
+            echo -e "${RED}Please enter a valid number of days${NC}"
+        fi
+    done
+
+    # Input max login (default 2)
+    read -p "Max Login (default: 2) : " max_login
+    if [[ -z "$max_login" ]] || ! [[ "$max_login" =~ ^[0-9]+$ ]]; then
+        max_login=2
+    fi
 
     # Calculate expiry date
     exp=$(date -d "+${duration} days" +"%Y-%m-%d")
@@ -46,7 +80,7 @@ add_vless_user() {
     port=$(grep '"port":' "$XRAY_CONFIG" | cut -d':' -f2 | tr -d ' ,')
 
     # Path configuration
-    echo -e "Path Configuration:"
+    echo -e "\n${YELLOW}Path Configuration:${NC}"
     echo -e "${GREEN}1. WebSocket (WS):${NC}"
     read -p "  Custom WS Path [default: /vless]: " custom_ws_path
     custom_ws_path=${custom_ws_path:-/vless}
@@ -69,39 +103,50 @@ add_vless_user() {
     grpc_path="$custom_grpc_path"
 
     # Add to database (storing all configurations)
-    echo "### $username $exp $uuid $ws_path $ws_tls_path $grpc_path" >>"$VLESS_DB"
+    echo "### $username $exp $uuid $max_login $ws_path $ws_tls_path $grpc_path" >>"$VLESS_DB"
 
     # Show configuration
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Vless Account Created"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
-    echo -e "Username : $username"
-    echo -e "UUID : $uuid"
-    echo -e "Expired Date : $exp"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e "Domain : $domain"
-    echo -e "Port : $port"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e "Path Details:"
-    echo -e "  • WebSocket (WS)    : $ws_path"
-    echo -e "  • WebSocket TLS     : $ws_tls_path"
-    echo -e "  • gRPC              : $grpc_path"
-    echo -e "───────────────────────────────────────────────────────────"
-    echo -e "Vless Link (WS):"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║                Vless Account Created                        ║${NC}"
+    echo -e "${BLUE}╘═══════════════════════════════════════════════════════════╝${NC}"
+
+    echo -e "\n${YELLOW}Account Information:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Username      : $username"
+    echo -e " UUID          : $uuid"
+    echo -e " Expired Date  : $exp"
+    echo -e " Max Login     : $max_login Device"
+    echo -e "└───────────────────────────────────────────────┘"
+
+    echo -e "\n${YELLOW}Server Information:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Domain        : $domain"
+    echo -e " Port          : $port"
+    echo -e "└───────────────────────────────────────────────┘"
+
+    echo -e "\n${YELLOW}Path Details:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " • WebSocket (WS)   : $ws_path"
+    echo -e " • WebSocket TLS    : $ws_tls_path"
+    echo -e " • gRPC             : $grpc_path"
+    echo -e "└───────────────────────────────────────────────┘"
+
+    echo -e "\n${YELLOW}Connection Links:${NC}"
     # Generate Vless links
+    echo -e "${GREEN}1. Vless Link (WS):${NC}"
     ws_link="vless://$uuid@$domain:$port?type=ws&security=none&path=$ws_path#$username-WS"
     echo -e "$ws_link"
 
-    echo -e "\nVless Link (WS TLS):"
+    echo -e "\n${GREEN}2. Vless Link (WS TLS):${NC}"
     ws_tls_link="vless://$uuid@$domain:$port?type=ws&security=tls&path=$ws_tls_path#$username-WS-TLS"
     echo -e "$ws_tls_link"
 
-    echo -e "\nVless Link (gRPC):"
+    echo -e "\n${GREEN}3. Vless Link (gRPC):${NC}"
     grpc_link="vless://$uuid@$domain:$port?type=grpc&security=tls&serviceName=$grpc_path#$username-GRPC"
     echo -e "$grpc_link"
 
-    echo -e "───────────────────────────────────────────────────────────"
+    echo -e "\n───────────────────────────────────────────────────────────"
     read -n 1 -s -r -p "Press any key to continue"
 }
 

@@ -1,18 +1,21 @@
 #!/bin/bash
-# Warna
+# Colors
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
-# Path
-SCRIPT_DIR="/root/vpn"
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+
+# Paths
+SCRIPT_DIR="/usr/local/vpn"
 VLESS_DB="$SCRIPT_DIR/config/xray/vless-users.db"
 
-# Function untuk memperpanjang user Vless
+# Function to extend Vless user
 extend_vless_user() {
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Extend Vless User"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║                  Extend Vless User                         ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
 
     # Check if database is empty
     if [[ ! -s "$VLESS_DB" ]]; then
@@ -21,18 +24,24 @@ extend_vless_user() {
         return 1
     fi
 
-    # List users with numbers
-    echo -e "Existing Vless Users:"
+    # List users with details
+    echo -e "${YELLOW}Existing Vless Users:${NC}"
     echo -e "───────────────────────────────────────────────────────────"
-    # Use a counter to number the users
+
+    # Use a counter to number the users and store details
+    declare -a users_array
     counter=0
+
+    # Read and process user entries
     while read -r line; do
         # Skip empty or comment lines
         [[ -z "$line" || "$line" == \#* ]] && continue
 
-        # Extract username and expiration date
+        # Extract user details
         username=$(echo "$line" | awk '{print $2}')
         exp_date=$(echo "$line" | awk '{print $3}')
+        # Default to 2 if no limit is stored (compatibility with previous versions)
+        max_login=$(echo "$line" | awk '{print $4 ? $4 : 2}')
 
         # Increment counter
         ((counter++))
@@ -44,7 +53,7 @@ extend_vless_user() {
         if [[ "$days_remaining" -lt 0 ]]; then
             status="${RED}Expired${NC}"
         elif [[ "$days_remaining" -le 3 ]]; then
-            status="${RED}Expiring Soon${NC}"
+            status="${YELLOW}Expiring Soon${NC}"
         else
             status="${GREEN}Active${NC}"
         fi
@@ -53,8 +62,8 @@ extend_vless_user() {
         users_array[$counter]="$line"
 
         # Print numbered list
-        printf "[%2d] %-15s | Expires: %-15s | Status: %s\n" "$counter" "$username" "$exp_date" "$status"
-
+        printf "[%2d] %-15s | Expires: %-15s | Max Login: %-5s | Status: %s\n" \
+            "$counter" "$username" "$exp_date" "$max_login" "$status"
     done < <(grep "^### " "$VLESS_DB")
 
     # Check if any users were found
@@ -65,6 +74,7 @@ extend_vless_user() {
     fi
 
     echo -e "───────────────────────────────────────────────────────────"
+
     # Prompt for user selection
     read -p "Enter the number of the user to extend [1-$counter]: " user_number
 
@@ -79,25 +89,55 @@ extend_vless_user() {
     selected_user="${users_array[$user_number]}"
     username=$(echo "$selected_user" | awk '{print $2}')
     current_exp=$(echo "$selected_user" | awk '{print $3}')
+    # Default to 2 if no limit is stored
+    current_max_login=$(echo "$selected_user" | awk '{print $4 ? $4 : 2}')
 
     # Input extension duration
-    read -p "Extend duration (days) : " duration
+    while true; do
+        read -p "Extend duration (days) : " duration
+        if [[ "$duration" =~ ^[0-9]+$ ]] && [ "$duration" -gt 0 ]; then
+            break
+        else
+            echo -e "${RED}Please enter a valid number of days${NC}"
+        fi
+    done
 
     # Calculate new expiry date
     new_exp=$(date -d "$current_exp +${duration} days" +"%Y-%m-%d")
 
-    # Update database
-    sed -i "s/^### $username $current_exp/### $username $new_exp/" "$VLESS_DB"
+    # Prompt to change max login
+    read -p "Current max login is $current_max_login. Do you want to change it? [y/N] : " change_login
+
+    if [[ "$change_login" =~ ^[Yy]$ ]]; then
+        while true; do
+            read -p "Enter new max login limit : " new_max_login
+            if [[ "$new_max_login" =~ ^[0-9]+$ ]] && [ "$new_max_login" -gt 0 ]; then
+                break
+            else
+                echo -e "${RED}Please enter a valid number${NC}"
+            fi
+        done
+    else
+        new_max_login=$current_max_login
+    fi
+
+    # Update database (for entries with limit)
+    sed -i "s/^### $username $current_exp .*/### $username $new_exp $new_max_login/" "$VLESS_DB"
 
     # Show configuration
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Vless Account Extended"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
-    echo -e "Username : $username"
-    echo -e "Old Expiry : $current_exp"
-    echo -e "New Expiry : $new_exp"
-    echo -e "Status : ${GREEN}Successfully Extended${NC}"
+    echo -e "${BLUE}╒═══════════════════════════════════════════════════════════╕${NC}"
+    echo -e "${BLUE}║               Vless Account Extended                        ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
+
+    echo -e "\n${YELLOW}Extension Details:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Username      : $username"
+    echo -e " Old Expiry    : $current_exp"
+    echo -e " New Expiry    : $new_exp"
+    echo -e " Max Login     : $new_max_login"
+    echo -e " Status        : ${GREEN}Successfully Extended${NC}"
+    echo -e "└───────────────────────────────────────────────┘"
 
     read -n 1 -s -r -p "Press any key to continue"
 }

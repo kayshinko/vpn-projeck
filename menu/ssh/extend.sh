@@ -1,89 +1,83 @@
 #!/bin/bash
-# Warna
+
+# Colors
 RED='\033[0;31m'
-NC='\033[0m'
 GREEN='\033[0;32m'
-# Path
-SCRIPT_DIR="/root/vpn"
-SSH_DB="$SCRIPT_DIR/config/ssh-users.db"
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Function untuk memperpanjang user
-extend_ssh_user() {
-    clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " Extend SSH User"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
+# Paths
+VPN_DIR="/usr/local/vpn"
+CONFIG_DIR="$VPN_DIR/config"
+SSH_DB="$CONFIG_DIR/ssh-users.db"
 
-    # Check if database is empty
-    if [[ ! -s "$SSH_DB" ]]; then
+# Function to check database
+check_database() {
+    if [ ! -f "$SSH_DB" ] || [ ! -s "$SSH_DB" ]; then
         echo -e "${RED}No SSH users found in the database${NC}"
-        read -n 1 -s -r -p "Press any key to continue"
         return 1
     fi
+    return 0
+}
 
-    # List users with numbers
-    echo -e "Existing SSH Users:"
-    echo -e "───────────────────────────────────────────────────────────"
-    # Use a counter to number the users
-    counter=0
-    while read -r line; do
-        # Skip empty or comment lines
+# Function to get user status and remaining days
+get_user_status() {
+    local exp_date=$1
+    local days_remaining=$((($(date -d "$exp_date" +%s) - $(date +%s)) / 86400))
+
+    if [[ "$days_remaining" -lt 0 ]]; then
+        echo "${RED}Expired (${days_remaining}d)${NC}"
+    elif [[ "$days_remaining" -le 3 ]]; then
+        echo "${YELLOW}Expiring Soon (${days_remaining}d)${NC}"
+    else
+        echo "${GREEN}Active (${days_remaining}d)${NC}"
+    fi
+}
+
+# Function to list users
+list_users() {
+    local counter=0
+    declare -A user_details
+
+    echo -e "\n${YELLOW}Current SSH Users:${NC}"
+    echo -e "┌─────────────────────────────────────────────────────────────┐"
+    printf "%-4s %-15s %-15s %-25s\n" "No." "Username" "Expiry Date" "Status"
+    echo -e "├─────────────────────────────────────────────────────────────┤"
+
+    while IFS= read -r line; do
         [[ -z "$line" || "$line" == \#* ]] && continue
 
-        # Extract username and expiration date
         username=$(echo "$line" | awk '{print $2}')
         exp_date=$(echo "$line" | awk '{print $3}')
-
-        # Increment counter
         ((counter++))
 
-        # Calculate days remaining
-        days_remaining=$((($(date -d "$exp_date" +%s) - $(date +%s)) / 86400))
+        user_details["$counter"]="$line"
+        status=$(get_user_status "$exp_date")
 
-        # Determine status
-        if [[ "$days_remaining" -lt 0 ]]; then
-            status="${RED}Expired${NC}"
-        elif [[ "$days_remaining" -le 3 ]]; then
-            status="${RED}Expiring Soon${NC}"
-        else
-            status="${GREEN}Active${NC}"
-        fi
-
-        # Store user details in an array
-        users_array[$counter]="$line"
-
-        # Print numbered list
-        printf "[%2d] %-15s | Expires: %-15s | Status: %s\n" "$counter" "$username" "$exp_date" "$status"
+        printf "%-4s %-15s %-15s %-25s\n" "[$counter]" "$username" "$exp_date" "$status"
     done < <(grep "^### " "$SSH_DB")
 
-    # Check if any users were found
+    echo -e "└─────────────────────────────────────────────────────────────┘"
+
     if [[ $counter -eq 0 ]]; then
         echo -e "${RED}No SSH users found${NC}"
-        read -n 1 -s -r -p "Press any key to continue"
         return 1
     fi
 
-    echo -e "───────────────────────────────────────────────────────────"
-    # Prompt for user selection
-    read -p "Enter the number of the user to extend [1-$counter]: " user_number
+    echo -e "\nTotal users: $counter"
+    return 0
+}
 
-    # Validate user selection
-    if [[ ! "$user_number" =~ ^[0-9]+$ ]] || [[ "$user_number" -lt 1 ]] || [[ "$user_number" -gt $counter ]]; then
-        echo -e "${RED}Invalid selection${NC}"
-        read -n 1 -s -r -p "Press any key to continue"
-        return 1
-    fi
+# Function to extend user expiry
+extend_user() {
+    local username=$1
+    local current_exp=$2
+    local duration=$3
+    local new_exp=$(date -d "$current_exp +${duration} days" +"%Y-%m-%d")
 
-    # Get selected user details
-    selected_user="${users_array[$user_number]}"
-    username=$(echo "$selected_user" | awk '{print $2}')
-    current_exp=$(echo "$selected_user" | awk '{print $3}')
-
-    # Input extension duration
-    read -p "Extend duration (days) : " duration
-
-    # Calculate new expiry date
-    new_exp=$(date -d "$current_exp +${duration} days" +"%Y-%m-%d")
+    # Create backup
+    cp "$SSH_DB" "${SSH_DB}.bak"
 
     # Update system user expiration
     chage -E "$new_exp" "$username"
@@ -91,18 +85,101 @@ extend_ssh_user() {
     # Update database
     sed -i "s/^### $username $current_exp$/### $username $new_exp/" "$SSH_DB"
 
-    # Show configuration
+    return 0
+}
+
+# Function to validate duration
+validate_duration() {
+    local duration=$1
+    if ! [[ "$duration" =~ ^[0-9]+$ ]] || [ "$duration" -lt 1 ] || [ "$duration" -gt 365 ]; then
+        echo -e "${RED}Invalid duration. Please enter a number between 1 and 365${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# Function to show extension result
+show_extension_result() {
+    local username=$1
+    local old_exp=$2
+    local new_exp=$3
+    local added_days=$4
+
     clear
-    echo -e "\033[5;34m╒═══════════════════════════════════════════════════════════╕\033[0m"
-    echo -e " SSH Account Extended"
-    echo -e "\033[5;34m╘═══════════════════════════════════════════════════════════╛\033[0m"
-    echo -e "Username : $username"
-    echo -e "Old Expiry : $current_exp"
-    echo -e "New Expiry : $new_exp"
-    echo -e "Status : ${GREEN}Successfully Extended${NC}"
+    echo -e "${BLUE}╔═══════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║            SSH Account Extended                ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════╝${NC}"
+
+    echo -e "\n${YELLOW}Extension Details:${NC}"
+    echo -e "┌───────────────────────────────────────────────┐"
+    echo -e " Username      : $username"
+    echo -e " Previous Exp. : $old_exp"
+    echo -e " Extended By   : $added_days days"
+    echo -e " New Expiry    : $new_exp"
+    echo -e " Status        : ${GREEN}Successfully Extended${NC}"
+    echo -e "└───────────────────────────────────────────────┘"
+}
+
+# Main function
+main() {
+    clear
+    echo -e "${BLUE}╔═══════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║            Extend SSH User                     ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════╝${NC}"
+
+    # Check database
+    check_database || {
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    }
+
+    # List users
+    list_users || {
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    }
+
+    # Get user selection
+    echo -e "\n${YELLOW}User Extension:${NC}"
+    read -p "Enter the number of user to extend: " user_number
+
+    # Get selected user
+    selected_line=$(sed -n "${user_number}p" <(grep "^### " "$SSH_DB"))
+
+    if [ -z "$selected_line" ]; then
+        echo -e "${RED}Invalid selection${NC}"
+        read -n 1 -s -r -p "Press any key to continue"
+        return 1
+    fi
+
+    username=$(echo "$selected_line" | awk '{print $2}')
+    current_exp=$(echo "$selected_line" | awk '{print $3}')
+
+    # Get extension duration
+    while true; do
+        read -p "Enter extension duration (days): " duration
+        validate_duration "$duration" && break
+    done
+
+    # Confirm extension
+    echo -e "\nSelected user: ${YELLOW}$username${NC}"
+    echo -e "Current expiry: $current_exp"
+    echo -e "Will extend by: $duration days"
+    read -p "Continue with extension? [y/N]: " confirm
+
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        if extend_user "$username" "$current_exp" "$duration"; then
+            new_exp=$(date -d "$current_exp +${duration} days" +"%Y-%m-%d")
+            show_extension_result "$username" "$current_exp" "$new_exp" "$duration"
+        else
+            echo -e "${RED}Failed to extend user${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Extension cancelled${NC}"
+    fi
 
     read -n 1 -s -r -p "Press any key to continue"
 }
 
-# Run function
-extend_ssh_user
+# Run main function
+main
